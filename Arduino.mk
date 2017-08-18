@@ -969,6 +969,19 @@ endif
 
 
 ########################################################################
+# Automatically find the libraries needed to compile the sketch
+
+ifndef SKETCH_LIBS
+	SKETCH_LIBS := $(shell $(ARDMK_DIR)/bin/lib-detection $(USER_LIB_PATH) | \
+                sed -ne 's/SKETCH_LIBS \(.*\) /\1/p')
+endif
+
+ifndef SKETCH_LIBS_DEPS
+	SKETCH_LIBS_DEPS := $(shell $(ARDMK_DIR)/bin/lib-detection $(USER_LIB_PATH) | \
+                sed -ne 's/SKETCH_LIBS_DEPS \(.*\) /\1/p')
+endif
+
+########################################################################
 # Determine ARDUINO_LIBS automatically
 
 ifndef ARDUINO_LIBS
@@ -1074,17 +1087,21 @@ rwildcard=$(foreach d,$(wildcard $1*),$(call rwildcard,$d/,$2) $(filter $(subst 
 # Gets include flags for library
 get_library_includes = $(if $(and $(wildcard $(1)/src), $(wildcard $(1)/library.properties)), \
                            -I$(1)/src, \
-                           $(addprefix -I,$(1) $(wildcard $(1)/utility)))
+                           $(addprefix -I,$(1) $(wildcard $(1)/utility)) \
+                           $(addprefix -I,$(1) $(dir $(wildcard $(1)/*/))))
 
 # Gets all sources with given extension (param2) for library (path = param1)
 # for old (1.0.x) layout looks in . and "utility" directories
 # for new (1.5.x) layout looks in src and recursively its subdirectories
 get_library_files  = $(if $(and $(wildcard $(1)/src), $(wildcard $(1)/library.properties)), \
                         $(call rwildcard,$(1)/src/,*.$(2)), \
-                        $(wildcard $(1)/*.$(2) $(1)/utility/*.$(2)))
+                        $(wildcard $(1)/*.$(2) $(1)/*/*.$(2) $(1)/utility/*.$(2)))
 
 # General arguments
-USER_LIBS      := $(sort $(wildcard $(patsubst %,$(USER_LIB_PATH)/%,$(ARDUINO_LIBS))))
+USER_LIBS     := $(wildcard $(patsubst %,$(USER_LIB_PATH)/%,$(ARDUINO_LIBS))) \
+                 $(wildcard $(patsubst %,$(USER_LIB_PATH)/%,$(SKETCH_LIBS))) \
+                 $(wildcard $(patsubst %,$(USER_LIB_PATH)/%,$(SKETCH_LIBS_DEPS)))
+
 USER_LIB_NAMES := $(patsubst $(USER_LIB_PATH)/%,%,$(USER_LIBS))
 
 # Let user libraries override system ones.
@@ -1303,13 +1320,24 @@ else
     endif
 endif
 
-ifneq (,$(strip $(ARDUINO_LIBS)))
-    $(call arduino_output,-)
-    $(call show_config_info,ARDUINO_LIBS =)
+ifneq (,$(strip $(SKETCH_LIBS)))
+    $(call show_config_info,SKETCH_LIBS =)
 endif
 
-ifneq (,$(strip $(USER_LIB_NAMES)))
-    $(foreach lib,$(USER_LIB_NAMES),$(call show_config_info,  $(lib),[USER]))
+ifneq (,$(strip $(SKETCH_LIBS)))
+    $(foreach lib,$(SKETCH_LIBS),$(call show_config_info,  $(lib),[USER]))
+endif
+
+ifneq (,$(strip $(SKETCH_LIBS_DEPS)))
+    $(call show_config_info,SKETCH_LIBS_DEPS =)
+endif
+
+ifneq (,$(strip $(SKETCH_LIBS_DEPS)))
+    $(foreach lib,$(SKETCH_LIBS_DEPS),$(call show_config_info,  $(lib),[USER]))
+endif
+
+ifneq (,$(strip $(SYS_LIB_NAMES) $(PLATFORM_LIB_NAMES)))
+    $(call show_config_info,SYSTEM_LIBS =)
 endif
 
 ifneq (,$(strip $(SYS_LIB_NAMES)))
